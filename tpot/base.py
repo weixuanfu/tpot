@@ -31,13 +31,14 @@ from multiprocessing import cpu_count
 
 import numpy as np
 import deap
+import distributed.joblib
 from deap import base, creator, tools, gp
 from tqdm import tqdm
 from copy import copy
 
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_X_y
-from sklearn.externals.joblib import Parallel, delayed
+from sklearn.externals.joblib import Parallel, delayed, parallel_backend
 from sklearn.pipeline import make_pipeline, make_union
 from sklearn.preprocessing import FunctionTransformer, Imputer
 from sklearn.model_selection import train_test_split
@@ -904,8 +905,10 @@ class TPOTBase(BaseEstimator):
                     groups=groups
                 )
                 jobs.append(job)
-            parallel = Parallel(n_jobs=self.n_jobs, verbose=0, pre_dispatch='2*n_jobs')
-            tmp_result_score = parallel(jobs)
+            with parallel_backend('dask.distributed', scheduler_host='localhost:8786',
+                      scatter=[features, target]):
+                  parallel = Parallel(n_jobs=self.n_jobs, verbose=0, pre_dispatch='2*n_jobs')
+                  tmp_result_score = parallel(jobs)
 
             # update pbar
             for val in tmp_result_score:
