@@ -889,6 +889,8 @@ class TPOTBase(BaseEstimator):
                     continue
                 eval_individuals_str.append(individual_str)
                 sklearn_pipeline_list.append(sklearn_pipeline)
+        
+        print('Number of new vaild pipelines in currect generation:', len(sklearn_pipeline_list))
 
         # evalurate pipeline
         resulting_score_list = []
