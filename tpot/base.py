@@ -27,7 +27,7 @@ import sys
 import imp
 from functools import partial
 from datetime import datetime
-from multiprocessing import cpu_count
+from multiprocessing import cpu_count, get_context
 import os
 
 import numpy as np
@@ -38,7 +38,6 @@ from copy import copy
 
 from sklearn.base import BaseEstimator
 from sklearn.utils import check_X_y
-from sklearn.externals.joblib import Parallel, delayed
 from sklearn.pipeline import make_pipeline, make_union
 from sklearn.preprocessing import FunctionTransformer, Imputer
 from sklearn.model_selection import train_test_split
@@ -989,11 +988,11 @@ class TPOTBase(BaseEstimator):
                 val = partial_wrapped_cross_val_score(sklearn_pipeline=sklearn_pipeline)
                 resulting_score_list = self._update_pbar(val, resulting_score_list)
         else:
+            forkserver = get_context('forkserver')
+            p = forkserver.Pool(processes=self.n_jobs)
             # chunk size for pbar update
             for chunk_idx in range(0, len(sklearn_pipeline_list), self.n_jobs * 4):
-                parallel = Parallel(n_jobs=self.n_jobs, verbose=0, pre_dispatch='2*n_jobs')
-                tmp_result_scores = parallel(delayed(partial_wrapped_cross_val_score)(sklearn_pipeline=sklearn_pipeline)
-                                             for sklearn_pipeline in sklearn_pipeline_list[chunk_idx:chunk_idx + self.n_jobs * 4])
+                tmp_result_scores = p.map(partial_wrapped_cross_val_score, sklearn_pipeline_list[chunk_idx:chunk_idx + self.n_jobs * 4])
                 # update pbar
                 for val in tmp_result_scores:
                     resulting_score_list = self._update_pbar(val, resulting_score_list)
