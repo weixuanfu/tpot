@@ -1,0 +1,135 @@
+# -*- coding: utf-8 -*-
+
+"""Copyright 2015-Present Randal S. Olson.
+
+This file is part of the TPOT library.
+
+TPOT is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as
+published by the Free Software Foundation, either version 3 of
+the License, or (at your option) any later version.
+
+TPOT is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with TPOT. If not, see <http://www.gnu.org/licenses/>.
+
+"""
+from functools import partial
+
+import numpy as np
+from sklearn.externals.joblib import Parallel, delayed
+
+from .individual import Individual
+
+
+class Population(object):
+    """A population of sklearn pipelines."""
+
+    def __init__(self, grammar):
+        """Instantiate a Population.
+
+        Parameters
+        ----------
+        grammar : Grammar
+            A grammar from which Individuals will be generated.
+        """
+        self._grammar = grammar
+        self._pop = []
+        # All generated Individual objects, keyed by their pipeline string
+        self._individual_cache = {}
+
+    def starting_generation(self, population_size):
+        """Generate a new population.
+
+        Parameters
+        ----------
+        population_size : int
+            The population size.
+        """
+        self._pop = [self.generate_individual() for _ in range(population_size)]
+
+    def generate_individual(self):
+        """Return a random Individual.
+
+        If multiple identical individuals are produced through this method, the
+        sunsequent individuals will be pulled from a cache. This prevents
+        identical individuals from being evaluated twice.
+        """
+        individual = self._grammar.reverse()
+        pipeline_str = str(individual)
+
+        try:
+            # If the instance already exists in the cache, return that
+            return self._individual_cache[pipeline_str]
+        except KeyError:
+            # Add this individual to the dictionary and return it
+            self._individual_cache[pipeline_str] = individual
+            return individual
+
+    def evaluate_population(self, features, target, cv, scoring_function, pbar, n_jobs, sample_weight=None, groups=None):
+        """Determine the fit of the provided individuals.
+
+        Parameters
+        ----------
+        features: numpy.ndarray {n_samples, n_features}
+            A numpy matrix containing the training and testing features for the individual's evaluation
+        target: numpy.ndarray {n_samples}
+            A numpy matrix containing the training and testing target for the individual's evaluation
+        cv: foo
+            TODO: document cv
+        scoring_function: callable
+            The scoring function.
+        pbar: tqdm progress bar
+            The progress bar object.
+        n_jobs: int
+            Number of threads to run.
+        sample_weight: array-like {n_samples}, optional
+            List of sample weights to balance (or un-balanace) the dataset target as needed
+        groups: array-like {n_samples, }, optional
+            Group labels for the samples used while splitting the dataset into train/test set
+
+        Returns
+        -------
+        fitnesses_ordered: list of floats
+            Returns a list of tuple value indicating the individual's fitness
+            according to its performance on the provided data
+        """
+        # Don't use parallelization if n_jobs == 1
+        if n_jobs == 1:
+            for individual in self._pop:
+                individual.cv_evalulate(
+                    features,
+                    target,
+                    cv,
+                    scoring_function,
+                    sample_weight,
+                    groups
+                )
+        else:
+            # chunk size for pbar update
+            for chunk_idx in range(0, len(self._pop), n_jobs * 4):
+                parallel = Parallel(n_jobs=n_jobs, verbose=0, pre_dispatch='2*n_jobs')
+                parallel(
+                    delayed(individual.cv_evalulate)(
+                        features,
+                        target,
+                        cv,
+                        scoring_function,
+                        sample_weight,
+                        groups
+                    ) for individual in self._pop[chunk_idx:chunk_idx + n_jobs * 4]
+                )
+
+        for individual in self._pop:
+            if type(individual.score) not in [float, np.float64, np.float32]:
+                raise ValueError(
+                    'Scoring function {} did not return a float.'.format(
+                        scoring_function.__name__
+                    )
+                )
+
+        return [individual.score for individual in self._pop]
