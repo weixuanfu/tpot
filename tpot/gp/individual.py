@@ -93,7 +93,7 @@ class Individual(object):
         self._parse_tree = parse_tree
         self._grammar = grammar
         self._sklearn = None
-        self.score = -float('inf')
+        self.score = None
         self.compexity = self.operator_count
 
     def __str__(self):
@@ -181,14 +181,17 @@ class Individual(object):
         groups: array-like {n_samples, }, optional
             Group labels for the samples used while splitting the dataset into
             train/test set.
+
+        Returns
+        -------
+        Cross-validation score.
         """
         # Don't evaluate the pipeline if it's already been scored
-        if self.score != -float('inf'):
-            return
+        if self.score is not None:
+            return self.score
 
         if self.model_names().count('PolynomialFeatures') > 1:
-            self.score = -float('inf')
-            return
+            return -float('inf')
 
         cv = check_cv(cv, target, classifier=is_classifier(self.to_sklearn()))
         cv_iter = list(cv.split(features, target, groups))
@@ -218,20 +221,16 @@ class Individual(object):
                 fit_params=self.set_sample_weight(sample_weight)
             )
 
-        # TODO: update pbar
-
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
 
                 scores = np.array([score(train, test) for train, test in cv_iter])[:, 0]
-                self.score = np.mean(scores)
+                return np.mean(scores)
         except TimeoutException:
-            # TODO: log warning for skipped evaluation
-            self.score = -float('inf')
             return "Timeout"
         except Exception as e:
-            self.score = -float('inf')
+            return -float('inf')
 
     def model_names(self):
         """Return a list of the names of all models used."""
@@ -239,6 +238,55 @@ class Individual(object):
         model_names = [model.__name__ for model in models]
 
         return model_names
+
+    def random_mutation(self):
+        """Perform a random mutation from possible mutation operators."""
+        return np.random.choice([
+            self.point_mutation,
+            self.insert_mutation,
+            self.shrink_mutation
+        ])()
+
+    def point_mutation(self):
+        """Perform a point mutation.
+
+        Returns
+        -------
+        A new Individual.
+        """
+        pass
+
+    def insert_mutation(self):
+        """Perform an insert mutation.
+
+        Returns
+        -------
+        A new Individual.
+        """
+        pass
+
+    def shrink_mutation(self):
+        """Perform a shrink mutation.
+
+        Returns
+        -------
+        A new Individual.
+        """
+        pass
+
+    def crossover_with(self, other):
+        """Perform crossover with another individual.
+
+        Parameters
+        ----------
+        other : Individual
+            A different individual to perform the crossover with.
+
+        Returns
+        -------
+        A new Individual.
+        """
+        pass
 
     def is_valid(self, tree_nodes=None, grammar_nodes=None):
         """Determine if a parse tree can be generated from a grammar.
