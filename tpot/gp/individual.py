@@ -80,7 +80,7 @@ def set_attr_recursive(pipeline, attribute, value):
 class Individual(object):
     """A machine learning pipeline."""
 
-    def __init__(self, parse_tree, grammar):
+    def __init__(self, parse_tree, rules_used, grammar, random_state=None):
         """Instantiate a new Individual from a parse tree.
 
         Parameters
@@ -89,9 +89,13 @@ class Individual(object):
             A parse-tree generated from a pipeline grammar.
         grammar : Grammar
             The grammar from which the Individual was generated.
+        random_state : tuple
+            The starting PRNG state the Individual was generated from.
         """
         self._parse_tree = parse_tree
+        self._rules_used = rules_used
         self._grammar = grammar
+        self._starting_prng_state = random_state
         self._sklearn = None
         self.score = None
         self.compexity = self.operator_count
@@ -120,7 +124,7 @@ class Individual(object):
                 # Fix random state when the operator allows
                 set_attr_recursive(self._sklearn.steps, 'random_state', seed)
 
-                if 'XGBClassifier' in self.model_names() or 'XGBRegressor' in self.model_names():
+                if 'XGBClassifier' in self.model_names or 'XGBRegressor' in self.model_names:
                     # Setting the seed is needed for XGBoost support because XGBoost
                     # stores both a seed and random_state, and they're not synced
                     # correctly. XGBoost will raise an exception if
@@ -133,6 +137,14 @@ class Individual(object):
     def operator_count(self):
         """Count the number of steps in the sklearn pipeline."""
         return len(list(pipeline_models(self.to_sklearn())))
+
+    @property
+    def model_names(self):
+        """Return a list of the names of all models used."""
+        models = list(pipeline_models(self.to_sklearn()))
+        model_names = [model.__name__ for model in models]
+
+        return model_names
 
     def set_sample_weight(self, sample_weight=None):
         """Recursively iterates through all objects in the pipeline and sets sample weight.
@@ -190,7 +202,7 @@ class Individual(object):
         if self.score is not None:
             return self.score
 
-        if self.model_names().count('PolynomialFeatures') > 1:
+        if self.model_names.count('PolynomialFeatures') > 1:
             return -float('inf')
 
         cv = check_cv(cv, target, classifier=is_classifier(self.to_sklearn()))
@@ -232,13 +244,6 @@ class Individual(object):
         except Exception as e:
             return -float('inf')
 
-    def model_names(self):
-        """Return a list of the names of all models used."""
-        models = list(pipeline_models(self.to_sklearn()))
-        model_names = [model.__name__ for model in models]
-
-        return model_names
-
     def random_mutation(self):
         """Perform a random mutation from possible mutation operators."""
         return np.random.choice([
@@ -272,7 +277,9 @@ class Individual(object):
         -------
         A new Individual.
         """
-        pass
+        # Don't perform a shrink if it would create an empty pipeline
+        if len(self.model_names) > 1:
+            pass
 
     def crossover_with(self, other):
         """Perform crossover with another individual.
@@ -287,51 +294,3 @@ class Individual(object):
         A new Individual.
         """
         pass
-
-    def is_valid(self, tree_nodes=None, grammar_nodes=None):
-        """Determine if a parse tree can be generated from a grammar.
-
-        Parameters
-        ----------
-        tree_nodes : list
-            A list of nodes in a parse tree.
-        grammar_nodes : generator
-            A generator for nodes in a grammar.
-
-        Returns
-        -------
-        bool representing if a tree can be generated from a grammar.
-        """
-        if grammar_nodes is None:
-            grammar_nodes = self._grammar.DFS()
-
-        if tree_nodes is None:
-            tree_nodes = self._parse_tree
-
-        try:
-            # Walk though the parse tree, and compare it against what the
-            # grammar generates.
-            for x in tree_nodes:
-                grammar_node = next(grammar_nodes)
-
-                # If the node is a generator, recurse on it
-                if grammar_node.__class__.__name__ == 'generator':
-                    # But if the tree node isn't a list, then the two don't match
-                    if not isinstance(x, list):
-                        raise ValueError(
-                            'Given the grammar, expected a list, found {}'.format(x)
-                        )
-
-                    if not self.is_valid(x, grammar_node):
-                        # Skip to next branch
-                        pass
-
-                # Make sure the two nodes are equal
-                elif x != grammar_node:
-                    raise ValueError(
-                        'Given the grammar, expected {}, found {}'.format(grammar_node, x)
-                    )
-        except ValueError:
-            return False
-
-        return True

@@ -60,7 +60,7 @@ class Population(object):
         """Return a random Individual.
 
         If multiple identical individuals are produced through this method, the
-        sunsequent individuals will be pulled from a cache. This prevents
+        subsequent individuals will be pulled from a cache. This prevents
         identical individuals from being evaluated twice.
         """
         individual = self._grammar.reverse()
