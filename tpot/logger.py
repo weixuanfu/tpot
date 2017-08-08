@@ -27,11 +27,11 @@ from tqdm import tqdm
 def pbar_check(func):
     """Decorate methods of Logger that depend on the _pbar attribute."""
     @wraps(func)
-    def wrapper(self, *args, **kwargs):
+    def _wrapper(self, *args, **kwargs):
         if self._pbar is not None and not self._pbar.disable:
             return func(self, *args, **kwargs)
 
-    return wrapper
+    return _wrapper
 
 
 class Logger(object):
@@ -60,11 +60,11 @@ class Logger(object):
         for level in cls.LOG_LEVELS[1:]:
             index = cls.LOG_LEVELS.index(level)
 
-            def display_at_level(self, message, target='stdout', verbosity=index):
+            def _display_at_level(self, message, target='stdout', verbosity=index):
                 self._display(message, target, verbosity)
 
-            display_at_level.__name__ = level
-            setattr(cls, level, display_at_level)
+            _display_at_level.__name__ = level
+            setattr(cls, level, _display_at_level)
 
     def __init__(self, verbosity='none'):
         """Initialize a Logger.

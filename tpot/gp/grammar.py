@@ -94,7 +94,7 @@ class Grammar(object):
             self._random_state.seed(seed)
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, logger=None):
         """Instantiate a Grammar from a TPOT config dictionary.
 
         Parameters
@@ -108,9 +108,10 @@ class Grammar(object):
         for module_path, parameters in config.items():
             Grammar._add_model(module_path, parameters, grammar, ctx)
 
-        return Grammar(grammar, ctx)
+        return Grammar(grammar, ctx, logger)
 
-    def _add_model(self, module_path, parameters, grammar, ctx):
+    @staticmethod
+    def _add_model(module_path, parameters, grammar, ctx, logger=None):
         """Add a model and its parameters to a grammar.
 
         Parameters
@@ -126,11 +127,12 @@ class Grammar(object):
         """
         try:
             model_class = import_module(module_path)
-        except Exception as e:
-            self._logger.warning(
-                'Could not import the module at {}. It will be ignored.'.
-                format(module_path)
-            )
+        except (ImportError, FileNotFoundError) as e:
+            if logger is not None:
+                logger.warning(
+                    '{}: Could not import the module at {}. It will be ignored.'.
+                    format(str(e), module_path)
+                )
 
         model_name = model_class.__name__
         # Add the model to our evaluation context

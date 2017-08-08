@@ -80,11 +80,13 @@ class Population(object):
         Parameters
         ----------
         features: numpy.ndarray {n_samples, n_features}
-            A numpy matrix containing the training and testing features for the individual's evaluation
+            A numpy matrix containing the training and testing features for
+            the individual's evaluation.
         target: numpy.ndarray {n_samples}
-            A numpy matrix containing the training and testing target for the individual's evaluation
-        cv: foo
-            TODO: document cv
+            A numpy matrix containing the training and testing target for the
+            individual's evaluation.
+        cv:
+            Cross-validation generator.
         scoring_function: callable
             The scoring function.
         pbar: tqdm progress bar
@@ -92,9 +94,11 @@ class Population(object):
         n_jobs: int
             Number of threads to run.
         sample_weight: array-like {n_samples}, optional
-            List of sample weights to balance (or un-balanace) the dataset target as needed
+            List of sample weights to balance (or un-balanace) the dataset
+            target as needed.
         groups: array-like {n_samples, }, optional
-            Group labels for the samples used while splitting the dataset into train/test set
+            Group labels for the samples used while splitting the dataset
+            into train/test set.
 
         Returns
         -------
@@ -111,19 +115,28 @@ class Population(object):
             scores = self._parallel_eval(n_jobs, *eval_args)
 
         for index, score in enumerate(scores):
-            individual = self._pop[index]
-
-            if score == "Timeout":
-                individual.score = -float('inf')
-            elif type(individual.score) not in [float, np.float64, np.float32]:
-                raise ValueError(
-                    'Scoring function {} did not return a float.'.
-                    format(scoring_function.__name__)
-                )
-            else:
-                individual.score = score
+            self._assign_score(index, score)
 
         return scores
+
+    def _assign_score(self, index, score):
+        """Assign a score to an individual in the population.
+
+        Parameters
+        ----------
+        index : int
+            Index of the individual in self._pop.
+        score : any
+            Score returned by the scoring function.
+        """
+        individual = self._pop[index]
+
+        if score == "Timeout":
+            individual.score = -float('inf')
+        elif not isinstance(individual.score, (float, np.float64, np.float32)):
+            raise ValueError('Scoring function did not return a float.')
+        else:
+            individual.score = score
 
     def _parallel_eval(self, n_jobs, *eval_args):
         """Evaluate the population with parallelization.
