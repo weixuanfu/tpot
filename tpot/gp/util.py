@@ -18,7 +18,14 @@ You should have received a copy of the GNU Lesser General Public
 License along with TPOT. If not, see <http://www.gnu.org/licenses/>.
 
 """
-from .util import flatten
-from .grammar import Grammar
-from .individual import Individual
-from .population import Population
+from collections import Iterable
+
+
+def flatten(tree):
+    """Flatten a tree into a single, flat list."""
+    for x in tree:
+        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
+            for y in flatten(x):
+                yield y
+        else:
+            yield x

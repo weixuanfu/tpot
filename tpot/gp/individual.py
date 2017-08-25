@@ -29,7 +29,7 @@ from sklearn.metrics.scorer import check_scoring
 from sklearn.base import clone, is_classifier
 from stopit import threading_timeoutable, TimeoutException
 
-from .grammar import flatten
+from .util import flatten
 
 
 def pipeline_models(pipeline):

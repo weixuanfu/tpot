@@ -20,24 +20,14 @@ License along with TPOT. If not, see <http://www.gnu.org/licenses/>.
 """
 import re
 import importlib
-from collections import Iterable
 from copy import deepcopy
 
 import numpy as np
 from sklearn.pipeline import make_pipeline
 
+from .util import flatten
 from .individual import Individual
 from ..builtins import StackingEstimator
-
-
-def flatten(tree):
-    """Flatten a tree into a single, flat list."""
-    for x in tree:
-        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
-            for y in flatten(x):
-                yield y
-        else:
-            yield x
 
 
 def is_estimator(model):
