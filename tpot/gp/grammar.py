@@ -185,8 +185,6 @@ class Grammar(object):
         -------
         An Individual from a word in the CFG.
         """
-        state = self._random_state.get_state()
-
         def reverse_iter(start=None):
             """Perform one iteration of reversing on the grammar.
 
@@ -199,23 +197,24 @@ class Grammar(object):
                 start = self._starting_rule
 
             tree = []
-            rule_names = []
             rule = self._rules[start]
 
-            # Add the branch onto the tree, recursing as needed.
-            for atom in np.random.choice(tuple(rule)):
+            try:
+                rand_index = np.random.randint(0, len(rule) - 1)
+            except ValueError:
+                # If there's only one branch in the rule, randint will through
+                # an error.
+                rand_index = 0
+
+            for atom in list(rule)[rand_index]:
                 groups = re.findall(self._variable_re, str(atom))
 
                 if len(groups) == 0:
                     tree.append(str(atom))
                 else:
-                    nested_tree, nested_rules = reverse_iter(groups[0])
+                    tree.append(reverse_iter(groups[0]))
 
-                    tree.append(nested_tree)
-                    rule_names.append(groups[0])
-                    rule_names.append(nested_rules)
+            return tree
 
-            return (tree, rule_names)
-
-        parse_tree, rules = reverse_iter()
-        return Individual(parse_tree, rules, self, state)
+        parse_tree = reverse_iter()
+        return Individual(parse_tree, self)

@@ -80,7 +80,7 @@ def set_attr_recursive(pipeline, attribute, value):
 class Individual(object):
     """A machine learning pipeline."""
 
-    def __init__(self, parse_tree, rules_used, grammar, random_state=None):
+    def __init__(self, parse_tree, grammar):
         """Instantiate a new Individual from a parse tree.
 
         Parameters
@@ -89,13 +89,9 @@ class Individual(object):
             A parse-tree generated from a pipeline grammar.
         grammar : Grammar
             The grammar from which the Individual was generated.
-        random_state : tuple
-            The starting PRNG state the Individual was generated from.
         """
         self._parse_tree = parse_tree
-        self._rules_used = rules_used
         self._grammar = grammar
-        self._starting_prng_state = random_state
         self._sklearn = None
         self.score = None
         self.compexity = self.operator_count
@@ -122,14 +118,14 @@ class Individual(object):
 
             if seed is not None:
                 # Fix random state when the operator allows
-                set_attr_recursive(self._sklearn.steps, 'random_state', seed)
+                set_attr_recursive(self._sklearn, 'random_state', seed)
 
                 if 'XGBClassifier' in self.model_names or 'XGBRegressor' in self.model_names:
                     # Setting the seed is needed for XGBoost support because XGBoost
                     # stores both a seed and random_state, and they're not synced
                     # correctly. XGBoost will raise an exception if
                     # random_state != seed.
-                    set_attr_recursive(self._sklearn.steps, 'seed', seed)
+                    set_attr_recursive(self._sklearn, 'seed', seed)
 
         return self._sklearn
 
@@ -142,7 +138,7 @@ class Individual(object):
     def model_names(self):
         """Return a list of the names of all models used."""
         models = list(pipeline_models(self.to_sklearn()))
-        model_names = [model.__name__ for model in models]
+        model_names = [model.__class__.__name__ for model in models]
 
         return model_names
 
