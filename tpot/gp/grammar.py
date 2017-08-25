@@ -63,7 +63,7 @@ class Grammar(object):
         'est_transform': {('StackingEstimator', '(', 'estimator=', '$est', '), ')},
     }
 
-    def __init__(self, rules, ctx):
+    def __init__(self, rules, ctx, logger, seed=None):
         """Instantiate a Grammar.
 
         Parameters
@@ -72,12 +72,19 @@ class Grammar(object):
             The grammar rules.
         ctx : dict
             The evaluation context for individuals in the grammar.
+        seed : int
+            Seed for the internal PRNG.
         """
         self._rules = rules
         self.ctx = ctx
+        self._random_state = np.random.RandomState()
+        self._logger = logger
+
+        if seed is not None:
+            self._random_state.seed(seed)
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, logger=None):
         """Instantiate a Grammar from a TPOT config dictionary.
 
         Parameters
@@ -91,10 +98,10 @@ class Grammar(object):
         for module_path, parameters in config.items():
             Grammar._add_model(module_path, parameters, grammar, ctx)
 
-        return Grammar(grammar, ctx)
+        return Grammar(grammar, ctx, logger)
 
     @staticmethod
-    def _add_model(module_path, parameters, grammar, ctx):
+    def _add_model(module_path, parameters, grammar, ctx, logger=None):
         """Add a model and its parameters to a grammar.
 
         Parameters
@@ -110,15 +117,21 @@ class Grammar(object):
         """
         try:
             model_class = import_module(module_path)
-        except Exception as e:
-            # Could not import model
-            return
+        except (ImportError, FileNotFoundError) as e:
+            if logger is not None:
+                logger.warning(
+                    '{}: Could not import the module at {}. It will be ignored.'.
+                    format(str(e), module_path)
+                )
 
         model_name = model_class.__name__
         # Add the model to our evaluation context
         ctx[model_name] = model_class
 
-        param_steps = [Grammar._add_parameter(name, values, model_name, grammar) for name, values in parameters.items()]
+        param_steps = [
+            Grammar._add_parameter(name, values, model_name, grammar)
+            for name, values in parameters.items()
+        ]
         model_entry = {(model_name, '(', *list(flatten(param_steps)), '), ')}
         model_type = 'est' if is_estimator(model_class) else 'prep'
 
@@ -160,64 +173,49 @@ class Grammar(object):
 
         return [param_name, '=', '${}'.format(grammar_param_name), ', ']
 
-    def reverse(self, start=None):
-        """Reverse a CFG to produce a random word in its language.
+    def reverse_from_state(self, state):
+        """Reverse a CFG with a fixed PRNG state."""
+        self._random_state.set_state(state)
+        return self.reverse()
 
-        Parameters
-        ----------
-        start : str
-            The starting rule in the grammar.
+    def reverse(self):
+        """Reverse a CFG to produce a random word in its language.
 
         Returns
         -------
         An Individual from a word in the CFG.
         """
-        if start is None:
-            start = self._starting_rule
+        state = self._random_state.get_state()
 
-        tree = []
-        rule = self._rules[start]
+        def reverse_iter(start=None):
+            """Perform one iteration of reversing on the grammar.
 
-        # Pick a random path to branch into, then add the selected branch onto
-        # the tree, recursing as needed.
-        for atom in np.random.choice(tuple(rule)):
-            groups = re.findall(self._variable_re, str(atom))
+            Parameters
+            ----------
+            start : str
+                The starting rule in the grammar.
+            """
+            if start is None:
+                start = self._starting_rule
 
-            if len(groups) == 0:
-                tree.append(str(atom))
-            else:
-                nested_tree = self.reverse(groups[0])
-                tree.append(nested_tree)
+            tree = []
+            rule_names = []
+            rule = self._rules[start]
 
-        return Individual(tree, self)
-
-    def DFS(self, max_depth=6, start=None):
-        """Yield nodes in the grammar through depth-first search.
-
-        Parameters
-        ----------
-        max_depth : int
-            The maximum depth to perform in the search.
-        start : str
-            The starting rule in the grammar.
-
-        Returns
-        -------
-        A generator yielding nodes in the grammar.
-        """
-        if max_depth < 1:
-            raise RecursionError
-
-        if start is None:
-            start = self._starting_rule
-
-        rule = self._rules[start]
-
-        for branch in rule:
-            for atom in branch:
+            # Add the branch onto the tree, recursing as needed.
+            for atom in np.random.choice(tuple(rule)):
                 groups = re.findall(self._variable_re, str(atom))
 
                 if len(groups) == 0:
-                    yield atom
+                    tree.append(str(atom))
                 else:
-                    yield self.BFS(max_depth - 1, groups[0])
+                    nested_tree, nested_rules = reverse_iter(groups[0])
+
+                    tree.append(nested_tree)
+                    rule_names.append(groups[0])
+                    rule_names.append(nested_rules)
+
+            return (tree, rule_names)
+
+        parse_tree, rules = reverse_iter()
+        return Individual(parse_tree, rules, self, state)
