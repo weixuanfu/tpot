@@ -27,7 +27,7 @@ from sklearn.pipeline import make_pipeline
 
 from .util import flatten
 from .individual import Individual
-from ..builtins import StackingEstimator
+from ..builtins import CombineDFs, StackingEstimator
 
 
 def is_estimator(model):
@@ -50,17 +50,35 @@ class Grammar(object):
     _variable_re = re.compile(r'^\$(\S+)$')
     _starting_rule = 'make_pipeline'
     _ctx_base = {
-        'make_pipeline': make_pipeline,
-        'StackingEstimator': StackingEstimator
+        'StackingEstimator': StackingEstimator,
+        'CombineDFs': CombineDFs
     }
+    # need import ctx_base from self.operators_context?
+    # preprocessor list
+    # classifier/regressor/cluster list
     _grammar_base = {
-        'make_pipeline': {('make_pipeline', '(', '$pipeline', ')')},
-        'pipeline': {('$ops', '$est')},
-        'ops': {('$prep', '$ops')} | {('$est_transform', '$ops')} | {()},
-        'combine': {('make_union', '(', '$make_pipeline', ', ', '$make_pipeline', ')')},
-        'est': set(),
-        'prep': set(),
-        'est_transform': {('StackingEstimator', '(', 'estimator=', '$est', '), ')},
+        'max_step': 5,
+        'step': {
+                    'step_num':1,
+                    'input': ['input_matrix'],
+                    'operator': [$preprocessor, $root]
+                },
+        'step': {
+                    'step_num': None, # any step
+                    'input': ['input_matrix', 'step'],
+                    'operator': [$preprocessor, $root]
+                },
+        'step': {
+                    'step_num': -1,
+                    'input': 'step', # any step
+                    'operator': [$root]
+                },
+        'combine': {
+                    'step_num': None, # any step
+                    'input': ['input_matrix', 'step'],
+                    'operator': $combine
+                }
+
     }
 
     def __init__(self, rules, ctx, logger, seed=None):
