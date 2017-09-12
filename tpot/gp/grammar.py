@@ -69,7 +69,7 @@ class Grammar(object):
                     'operator': [$preprocessor, $root]
                 },
         'step': {
-                    'step_num': -1,
+                    'step_num': -1, #last step
                     'input': 'step', # any step
                     'operator': [$root]
                 },
@@ -77,6 +77,9 @@ class Grammar(object):
                     'step_num': None, # any step
                     'input': ['input_matrix', 'step'],
                     'operator': $combine
+                }
+        'rule': {
+                    'max_uniq_preprocessor': 1, #Maximum number of unique preprocessor in a pipelines
                 }
 
     }
