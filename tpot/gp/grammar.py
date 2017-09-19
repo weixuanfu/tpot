@@ -79,7 +79,7 @@ class Grammar(object):
                     'operator': $combine
                 }
         'rule': {
-                    'max_uniq_preprocessor': 1, #Maximum number of unique preprocessor in a pipelines
+                    'uniq_preprocessor': True, #Maximum number of unique preprocessor in a pipelines
                 }
 
     }
