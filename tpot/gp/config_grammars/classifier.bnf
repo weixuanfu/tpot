@@ -1,0 +1,18 @@
+<Start> ::= <preprocessing> <algorithm> | <algorithm>
+
+<preprocessing> ::= <sklearn.decomposition.PCA> | <sklearn.preprocessing.RobustScaler>
+
+
+<sklearn.decomposition.PCA> ::= <svd_solver> <iterated_power>
+<svd_solver> ::= 'randomized'
+<iterated_power> ::= 'range(1, 11)'
+
+<sklearn.preprocessing.RobustScaler> ::= 'None'
+
+<algorithm> := <sklearn.naive_bayes.GaussianNB>
+
+<sklearn.naive_bayes.GaussianNB> ::= 'None'
+
+<sklearn.naive_bayes.BernoulliNB> ::= <alpha> <fit_prior>
+<alpha> ::= '1e-3' | '1e-2' | '1e-1' | '1.' | '10.' | '100.'
+<fit_prior> ::= 'True' | 'False'
