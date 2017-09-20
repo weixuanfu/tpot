@@ -57,27 +57,25 @@ class Grammar(object):
     # preprocessor list
     # classifier/regressor/cluster list
     _grammar_base = {
-        'max_step': 5,
         'step': {
-                    'step_num':1,
-                    'input': ['input_matrix'],
-                    'operator': [$preprocessor, $root]
+                    '0': { # frist step
+                        'input': ['input_matrix'],
+                        'operator': ['Imputer']
+                    },
+                    'End': { #last step
+                        'input': ['transformed_matrix', 'combine'],
+                        'operator': ['$root']
+                    },
+                    'Combine': { # combine step
+                        'input': ['input_matrix', 'transformed_matrix', 'combine'],
+                        'operator': ['$combine']
+                    },
+                    'Other': { # other step
+                        'input': ['transformed_matrix', 'combine'],
+                        'operator': ['$preprocessor', '$root']
+                    }
                 },
-        'step': {
-                    'step_num': None, # any step
-                    'input': ['input_matrix', 'step'],
-                    'operator': [$preprocessor, $root]
-                },
-        'step': {
-                    'step_num': -1, #last step
-                    'input': 'step', # any step
-                    'operator': [$root]
-                },
-        'combine': {
-                    'step_num': None, # any step
-                    'input': ['input_matrix', 'step'],
-                    'operator': $combine
-                }
+
         'rule': {
                     'uniq_preprocessor': True, #Maximum number of unique preprocessor in a pipelines
                 }

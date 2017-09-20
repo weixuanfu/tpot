@@ -20,8 +20,8 @@ License along with TPOT. If not, see <http://www.gnu.org/licenses/>.
 """
 from collections import Iterable
 import numpy as np
-from ..export_utils import TPOTOperatorClassFactory, Operator, ARGType
-from ..config import classifier_config_dict_light
+from operator_utils import TPOTOperatorClassFactory, Operator, ARGType
+from config import classifier_config_dict_light
 
 def flatten(tree):
     """Flatten a tree into a single, flat list."""
@@ -35,7 +35,8 @@ def flatten(tree):
 
 operators = []
 
-classifier_config_dict_light['sklearn.preprocessing.Imputer'] = {strategy:['median']}
+classifier_config_dict_light['sklearn.preprocessing.Imputer'] = {'strategy':['median']}
+classifier_config_dict_light.pop('tpot.builtins.ZeroCount', None)
 
 for key in sorted(classifier_config_dict_light.keys()):
     op_class, arg_types = TPOTOperatorClassFactory(
@@ -70,7 +71,7 @@ grammar_base = {
             }
     }
 
-def generate_tree(opset, min_=1, max_=5, grammar=grammar_base, type_='main'):
+def generate_tree(opset, min_=1, max_=10, grammar=grammar_base, type_='main'):
     """Generate a Tree as a list of lists.
 
     The tree is build from the root to the leaves, and it stop growing when
@@ -96,21 +97,39 @@ def generate_tree(opset, min_=1, max_=5, grammar=grammar_base, type_='main'):
     individual: list
         A grown tree with leaves at possibly different depths
         dependending on the grammar
+    height:
+        height of tree
     """
 
     expr = []
 
     roots = [op for op in opset if op.root]
-    preprocessosr = [op for op in opset if not op.root]
+    print('Roots', len(roots))
+    preprocessors = [op for op in opset if not op.root]
+    print('Prepprocess', len(preprocessors))
     grammar_step = grammar['step']
     preset_step = [key for key in grammar_step.keys() if isinstance(key, int)]
-    max_step = max(preset_step) + 1
+    min_step = max(preset_step) + 1
+    print(preset_step, min_step)
 
-    # reset min_ and max_
-    #min_ =
-
-
+    if type_ == 'main':
+        # reset min_
+        min_ = max(min_, min_step)
     height = np.random.randint(min_, max_)
 
+    if type_ == 'main'
+        # last step:
+        op_list = preset_step['End']['operator']
+        expr.append(np.random.choice(op_list))
+        remaining_height -= 1
+        while remaining_height > 0:
+            expr_children, branch_depth = generate_tree(opset, min_=1, max_=remaining_height, grammar=grammar_base, type_='branch')
+            remaining_height -= branch_depth
+            expr.append(expr_children)
+    else: # 'branch'
+        if height > 2:
+            op_type = np.random.choice(['other', 'combine'])
 
-    op = np.random.choice(roots)
+    return expr, height
+
+generate_tree(operators)
