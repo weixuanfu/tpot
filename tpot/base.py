@@ -252,7 +252,7 @@ class TPOTBase(BaseEstimator):
 
         if fixed_length:
             self._min = fixed_length
-            self._max = fixed_length
+            self._max = fixed_length + 1
         else:
             self._min = 1
             self._max = 3
