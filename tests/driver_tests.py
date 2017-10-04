@@ -175,7 +175,8 @@ def test_driver_5():
                 '-cv', '3',
                 '-s', '42',
                 '-config', 'TPOT light',
-                '-v', '0'
+                '-v', '0',
+                '--no-update-check'
                 ]
     args = _get_arg_parser().parse_args(args_list)
     with captured_output() as (out, err):
@@ -256,6 +257,7 @@ CHECKPOINT_FOLDER   =     None
 CONFIG_FILE         =     None
 CROSSOVER_RATE      =     0.1
 EARLY_STOP          =     None
+FIXED_LENGTH        =     None
 GENERATIONS         =     100
 INPUT_FILE          =     tests/tests.csv
 INPUT_SEPARATOR     =     ,
@@ -265,7 +267,7 @@ MUTATION_RATE       =     0.9
 NUM_CV_FOLDS        =     5
 NUM_JOBS            =     1
 OFFSPRING_SIZE      =     100
-OUTPUT_FILE         =     
+OUTPUT_FILE         =     {}
 POPULATION_SIZE     =     100
 RANDOM_STATE        =     None
 SCORING_FN          =     accuracy
@@ -274,9 +276,7 @@ TARGET_NAME         =     class
 TPOT_MODE           =     classification
 VERBOSITY           =     1
 
-"""
-        print
-
+""".format('')
         self.assertEqual(_sort_lines(expected_output), _sort_lines(output))
 
 
@@ -297,6 +297,7 @@ CHECKPOINT_FOLDER   =     None
 CONFIG_FILE         =     None
 CROSSOVER_RATE      =     0.1
 EARLY_STOP          =     None
+FIXED_LENGTH        =     None
 GENERATIONS         =     100
 INPUT_FILE          =     tests/tests.csv
 INPUT_SEPARATOR     =     ,
@@ -306,7 +307,7 @@ MUTATION_RATE       =     0.9
 NUM_CV_FOLDS        =     5
 NUM_JOBS            =     1
 OFFSPRING_SIZE      =     100
-OUTPUT_FILE         =     
+OUTPUT_FILE         =     {}
 POPULATION_SIZE     =     100
 RANDOM_STATE        =     None
 SCORING_FN          =     neg_mean_squared_error
@@ -315,7 +316,7 @@ TARGET_NAME         =     class
 TPOT_MODE           =     regression
 VERBOSITY           =     1
 
-"""
+""".format('')
 
         self.assertEqual(_sort_lines(expected_output), _sort_lines(output))
 
