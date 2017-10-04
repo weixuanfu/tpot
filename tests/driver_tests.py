@@ -176,7 +176,8 @@ def test_driver_5():
                 '-cv', '3',
                 '-s', '42',
                 '-config', 'TPOT light',
-                '-v', '0'
+                '-v', '0',
+                '--no-update-check'
                 ]
     args = _get_arg_parser().parse_args(args_list)
     with captured_output() as (out, err):
@@ -249,6 +250,7 @@ class ParserTest(TestCase):
 TPOT settings:
 CONFIG_FILE\t=\tNone
 CROSSOVER_RATE\t=\t0.1
+FIXED_LENGTH\t=\tNone
 GENERATIONS\t=\t100
 INPUT_FILE\t=\ttests/tests.csv
 INPUT_SEPARATOR\t=\t\t
@@ -287,6 +289,7 @@ VERBOSITY\t=\t1
 TPOT settings:
 CONFIG_FILE\t=\tNone
 CROSSOVER_RATE\t=\t0.1
+FIXED_LENGTH\t=\tNone
 GENERATIONS\t=\t100
 INPUT_FILE\t=\ttests/tests.csv
 INPUT_SEPARATOR\t=\t\t
