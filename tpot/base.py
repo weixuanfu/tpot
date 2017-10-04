@@ -90,7 +90,7 @@ class TPOTBase(BaseEstimator):
                  mutation_rate=0.9, crossover_rate=0.1,
                  scoring=None, cv=5, subsample=1.0, n_jobs=1,
                  max_time_mins=None, max_eval_time_mins=5,
-                 random_state=None, config_dict=None,
+                 random_state=None, config_dict=None, fixed_length=None,
                  warm_start=False, periodic_checkpoint_folder=None, early_stop=None,
                  verbosity=0, disable_update_check=False):
         """Set up the genetic programming algorithm for pipeline optimization.
@@ -187,6 +187,8 @@ class TPOTBase(BaseEstimator):
             String 'TPOT sparse':
                 TPOT uses a configuration dictionary with a one-hot-encoder and the
                 operators normally included in TPOT that also support sparse matrices.
+        fixed_length: integer (default=None)
+            fix length of pipelines
         warm_start: bool, optional (default: False)
             Flag indicating whether the TPOT instance will reuse the population from
             previous calls to fit().
@@ -245,6 +247,15 @@ class TPOTBase(BaseEstimator):
         # Try crossover and mutation at most this many times for
         # any one given individual (or pair of individuals)
         self._max_mut_loops = 50
+
+        self.fixed_length = fixed_length
+
+        if fixed_length:
+            self._min = fixed_length
+            self._max = fixed_length
+        else:
+            self._min = 1
+            self._max = 3
 
         # Set offspring_size equal to population_size by default
         if offspring_size:
@@ -442,13 +453,16 @@ class TPOTBase(BaseEstimator):
         creator.create('Individual', gp.PrimitiveTree, fitness=creator.FitnessMulti)
 
         self._toolbox = base.Toolbox()
-        self._toolbox.register('expr', self._gen_grow_safe, pset=self._pset, min_=1, max_=3)
+        self._toolbox.register('expr', self._gen_grow_safe, pset=self._pset, min_=self._min, max_=self._max)
         self._toolbox.register('individual', tools.initIterate, creator.Individual, self._toolbox.expr)
         self._toolbox.register('population', tools.initRepeat, list, self._toolbox.individual)
         self._toolbox.register('compile', self._compile_to_sklearn)
         self._toolbox.register('select', tools.selNSGA2)
         self._toolbox.register('mate', self._mate_operator)
-        self._toolbox.register('expr_mut', self._gen_grow_safe, min_=1, max_=4)
+        if self.fixed_length:
+            self._toolbox.register('expr_mut', self._gen_grow_safe, min_=self._min, max_=self._max)
+        else:
+            self._toolbox.register('expr_mut', self._gen_grow_safe, min_=self._min, max_=self._max + 1)
         self._toolbox.register('mutate', self._random_mutation_operator)
 
 
@@ -1212,35 +1226,38 @@ class TPOTBase(BaseEstimator):
             Returns the individual with one of the mutations applied to it
 
         """
-        mutation_techniques = [
-            partial(gp.mutInsert, pset=self._pset),
-            partial(mutNodeReplacement, pset=self._pset)
-        ]
+        if self.fixed_length:
+            return mutNodeReplacement(individual, pset=self._pset)
+        else:
+            mutation_techniques = [
+                partial(gp.mutInsert, pset=self._pset),
+                partial(mutNodeReplacement, pset=self._pset)
+            ]
 
-        # We can't shrink pipelines with only one primitive, so we only add it if we find more primitives.
-        number_of_primitives = sum([isinstance(node, deap.gp.Primitive) for node in individual])
-        if number_of_primitives > 1 and allow_shrink:
-            mutation_techniques.append(partial(gp.mutShrink))
+            # We can't shrink pipelines with only one primitive, so we only add it if we find more primitives.
+            number_of_primitives = sum([isinstance(node, deap.gp.Primitive) for node in individual])
+            if number_of_primitives > 1 and allow_shrink:
+                mutation_techniques.append(partial(gp.mutShrink))
 
-        mutator = np.random.choice(mutation_techniques)
+            mutator = np.random.choice(mutation_techniques)
 
-        unsuccesful_mutations = 0
-        for _ in range(self._max_mut_loops):
-            # We have to clone the individual because mutator operators work in-place.
-            ind = self._toolbox.clone(individual)
-            offspring, = mutator(ind)
-            if str(offspring) not in self.evaluated_individuals_:
-                break
-            else:
-                unsuccesful_mutations += 1
+            unsuccesful_mutations = 0
+            for _ in range(self._max_mut_loops):
+                # We have to clone the individual because mutator operators work in-place.
+                ind = self._toolbox.clone(individual)
+                offspring, = mutator(ind)
+                if str(offspring) not in self.evaluated_individuals_:
+                    break
+                else:
+                    unsuccesful_mutations += 1
 
-        # Sometimes you have pipelines for which every shrunk version has already been explored too.
-        # To still mutate the individual, one of the two other mutators should be applied instead.
-        if ((unsuccesful_mutations == 50) and
-           (type(mutator) is partial and mutator.func is gp.mutShrink)):
-            offspring, = self._random_mutation_operator(individual, allow_shrink=False)
+            # Sometimes you have pipelines for which every shrunk version has already been explored too.
+            # To still mutate the individual, one of the two other mutators should be applied instead.
+            if ((unsuccesful_mutations == 50) and
+               (type(mutator) is partial and mutator.func is gp.mutShrink)):
+                offspring, = self._random_mutation_operator(individual, allow_shrink=False)
 
-        return offspring,
+            return offspring,
 
 
     def _gen_grow_safe(self, pset, min_, max_, type_=None):
