@@ -176,7 +176,8 @@ def test_driver_5():
                 '-cv', '3',
                 '-s', '42',
                 '-config', 'TPOT light',
-                '-v', '0'
+                '-v', '0',
+                '--no-update-check'
                 ]
     args = _get_arg_parser().parse_args(args_list)
     with captured_output() as (out, err):

@@ -418,7 +418,7 @@ class TPOTBase(BaseEstimator):
         creator.create('Individual', gp.PrimitiveTree, fitness=creator.FitnessMulti)
 
         self._toolbox = base.Toolbox()
-        self._toolbox.register('expr', self._gen_grow_safe, pset=self._pset, min_=1, max_=3)
+        self._toolbox.register('expr', self._gen_grow_safe, pset=self._pset, min_=1, max_=6)
         self._toolbox.register('individual', tools.initIterate, creator.Individual, self._toolbox.expr)
         self._toolbox.register('population', tools.initRepeat, list, self._toolbox.individual)
         self._toolbox.register('compile', self._compile_to_sklearn)

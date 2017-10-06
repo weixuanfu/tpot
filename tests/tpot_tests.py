@@ -469,7 +469,7 @@ def test_fit_GroupKFold():
 
     tpot_obj = TPOTClassifier(
         random_state=42,
-        population_size=2,
+        population_size=4,
         offspring_size=4,
         generations=1,
         verbosity=0,
@@ -477,7 +477,7 @@ def test_fit_GroupKFold():
         cv=GroupKFold(n_splits=2),
     )
     tpot_obj.fit(training_features, training_target, groups=groups)
-    assert_greater_equal(tpot_obj.score(testing_features, testing_target), 0.97)
+    assert_greater_equal(tpot_obj.score(testing_features, testing_target), 0.95)
 
 
 def test_predict():
