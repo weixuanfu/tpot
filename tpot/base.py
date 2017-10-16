@@ -1227,37 +1227,36 @@ class TPOTBase(BaseEstimator):
 
         """
         if self.fixed_length:
-            return mutNodeReplacement(individual, pset=self._pset)
+            mutation_techniques = [partial(mutNodeReplacement, pset=self._pset)]
         else:
             mutation_techniques = [
                 partial(gp.mutInsert, pset=self._pset),
                 partial(mutNodeReplacement, pset=self._pset)
             ]
-
             # We can't shrink pipelines with only one primitive, so we only add it if we find more primitives.
             number_of_primitives = sum([isinstance(node, deap.gp.Primitive) for node in individual])
             if number_of_primitives > 1 and allow_shrink:
                 mutation_techniques.append(partial(gp.mutShrink))
 
-            mutator = np.random.choice(mutation_techniques)
+        mutator = np.random.choice(mutation_techniques)
 
-            unsuccesful_mutations = 0
-            for _ in range(self._max_mut_loops):
-                # We have to clone the individual because mutator operators work in-place.
-                ind = self._toolbox.clone(individual)
-                offspring, = mutator(ind)
-                if str(offspring) not in self.evaluated_individuals_:
-                    break
-                else:
-                    unsuccesful_mutations += 1
+        unsuccesful_mutations = 0
+        for _ in range(self._max_mut_loops):
+            # We have to clone the individual because mutator operators work in-place.
+            ind = self._toolbox.clone(individual)
+            offspring, = mutator(ind)
+            if str(offspring) not in self.evaluated_individuals_:
+                break
+            else:
+                unsuccesful_mutations += 1
 
-            # Sometimes you have pipelines for which every shrunk version has already been explored too.
-            # To still mutate the individual, one of the two other mutators should be applied instead.
-            if ((unsuccesful_mutations == 50) and
-               (type(mutator) is partial and mutator.func is gp.mutShrink)):
-                offspring, = self._random_mutation_operator(individual, allow_shrink=False)
+        # Sometimes you have pipelines for which every shrunk version has already been explored too.
+        # To still mutate the individual, one of the two other mutators should be applied instead.
+        if ((unsuccesful_mutations == 50) and
+           (type(mutator) is partial and mutator.func is gp.mutShrink)):
+            offspring, = self._random_mutation_operator(individual, allow_shrink=False)
 
-            return offspring,
+        return offspring,
 
 
     def _gen_grow_safe(self, pset, min_, max_, type_=None):
