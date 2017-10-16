@@ -436,7 +436,8 @@ class TPOTBase(BaseEstimator):
                 for var in operator.import_hash[key]:
                     self.operators_context[var] = eval(var)
 
-        #self._pset.addPrimitive(CombineDFs(), [np.ndarray, np.ndarray], np.ndarray)
+        if not self.fixed_length: # no CombineDFs when fixed_length
+            self._pset.addPrimitive(CombineDFs(), [np.ndarray, np.ndarray], np.ndarray)
 
 
     def _add_terminals(self):
