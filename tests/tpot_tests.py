@@ -23,8 +23,8 @@ from tpot import TPOTClassifier, TPOTRegressor
 from tpot.base import TPOTBase
 from tpot.driver import float_range
 from tpot.gp_types import Output_Array
-from tpot.gp_deap import mutNodeReplacement, _wrapped_cross_val_score, pick_two_individuals_eligible_for_crossover, cxOnePoint, varOr
-from tpot.metrics import balanced_accuracy
+from tpot.gp_deap import mutNodeReplacement, _wrapped_cross_val_score, pick_two_individuals_eligible_for_crossover, cxOnePoint, varOr, initialize_stats_dict
+from tpot.metrics import balanced_accuracy, SCORERS
 from tpot.operator_utils import TPOTOperatorClassFactory, set_sample_weight
 from tpot.decorators import pretest_X, pretest_y
 
@@ -40,14 +40,19 @@ import numpy as np
 from scipy import sparse
 import inspect
 import random
+import warnings
 from multiprocessing import cpu_count
 import os
 from re import search
 from datetime import datetime
 from time import sleep
+from tempfile import mkdtemp
+from shutil import rmtree
 
 from sklearn.datasets import load_digits, load_boston
 from sklearn.model_selection import train_test_split, cross_val_score, GroupKFold
+from sklearn.externals.joblib import Memory
+from sklearn.metrics import make_scorer
 from deap import creator
 from deap.tools import ParetoFront
 from nose.tools import assert_raises, assert_not_equal, assert_greater_equal, assert_equal, assert_in
@@ -134,8 +139,20 @@ def test_init_default_scoring():
 
 
 def test_init_default_scoring_2():
-    """Assert that TPOT intitializes with the correct customized scoring function."""
-    tpot_obj = TPOTClassifier(scoring=balanced_accuracy)
+    """Assert that TPOT intitializes with a valid customized metric function."""
+    with warnings.catch_warnings(record=True) as w:
+        tpot_obj = TPOTClassifier(scoring=balanced_accuracy)
+    assert len(w) == 1
+    assert issubclass(w[-1].category, DeprecationWarning)
+    assert "This scoring type was deprecated" in str(w[-1].message)
+    assert tpot_obj.scoring_function == 'balanced_accuracy'
+
+
+def test_init_default_scoring_3():
+    """Assert that TPOT intitializes with a valid scorer."""
+    with warnings.catch_warnings(record=True) as w:
+        tpot_obj = TPOTClassifier(scoring=make_scorer(balanced_accuracy))
+    assert len(w) == 0
     assert tpot_obj.scoring_function == 'balanced_accuracy'
 
 
@@ -603,15 +620,22 @@ def test_predict_proba_4():
 
 def test_warm_start():
     """Assert that the TPOT warm_start flag stores the pop and pareto_front from the first run."""
-    tpot_obj = TPOTClassifier(random_state=42, population_size=1, offspring_size=2, generations=1, verbosity=0, warm_start=True)
-    tpot_obj.fit(training_features, training_target)
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        verbosity=0,
+        config_dict='TPOT light',
+        warm_start=True)
+    tpot_obj.fit(pretest_X, pretest_y)
 
     assert tpot_obj._pop is not None
     assert tpot_obj._pareto_front is not None
 
     first_pop = tpot_obj._pop
     tpot_obj.random_state = 21
-    tpot_obj.fit(training_features, training_target)
+    tpot_obj.fit(pretest_X, pretest_y)
 
     assert tpot_obj._pop == first_pop
 
@@ -625,7 +649,7 @@ def test_fit():
         generations=1,
         verbosity=0
     )
-    tpot_obj.fit(training_features, training_target)
+    tpot_obj.fit(pretest_X, pretest_y)
 
     assert isinstance(tpot_obj._optimized_pipeline, creator.Individual)
     assert not (tpot_obj._start_datetime is None)
@@ -683,6 +707,121 @@ def test_fit_4():
 
     assert isinstance(tpot_obj._optimized_pipeline, creator.Individual)
     assert not (tpot_obj._start_datetime is None)
+
+
+def test_memory():
+    """Assert that the TPOT fit function runs normally with memory=\'auto\'."""
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        config_dict='TPOT light',
+        memory='auto',
+        verbosity=0
+    )
+    tpot_obj.fit(training_features, training_target)
+
+    assert isinstance(tpot_obj._optimized_pipeline, creator.Individual)
+    assert not (tpot_obj._start_datetime is None)
+    assert tpot_obj.memory is not None
+    assert tpot_obj._memory is None
+    assert tpot_obj._cachedir is not None
+    assert not os.path.isdir(tpot_obj._cachedir)
+
+
+def test_memory_2():
+    """Assert that the TPOT _setup_memory function runs normally with a valid path."""
+    cachedir = mkdtemp()
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        config_dict='TPOT light',
+        memory=cachedir,
+        verbosity=0
+    )
+    tpot_obj._setup_memory()
+    rmtree(cachedir)
+
+    assert tpot_obj._cachedir == cachedir
+    assert isinstance(tpot_obj._memory, Memory)
+
+
+def test_memory_3():
+    """Assert that the TPOT fit function does not clean up caching directory when memory is a valid path."""
+    cachedir = mkdtemp()
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        config_dict='TPOT light',
+        memory=cachedir,
+        verbosity=0
+    )
+    tpot_obj.fit(training_features, training_target)
+
+    assert tpot_obj._cachedir == cachedir
+    assert os.path.isdir(tpot_obj._cachedir)
+    assert isinstance(tpot_obj._memory, Memory)
+    # clean up
+    rmtree(cachedir)
+    tpot_obj._memory = None
+
+
+def test_memory_4():
+    """Assert that the TPOT _setup_memory function rasies ValueError with a invalid path."""
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        config_dict='TPOT light',
+        memory="./fake_temp_dir",
+        verbosity=0
+    )
+
+    assert_raises(ValueError, tpot_obj._setup_memory)
+
+
+def test_memory_5():
+    """Assert that the TPOT _setup_memory function runs normally with a Memory object."""
+    cachedir = mkdtemp()
+    memory = Memory(cachedir=cachedir, verbose=0)
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        config_dict='TPOT light',
+        memory=memory,
+        verbosity=0
+    )
+
+    tpot_obj._setup_memory()
+    rmtree(cachedir)
+    assert tpot_obj.memory == memory
+    assert tpot_obj._memory == memory
+    # clean up
+    tpot_obj._memory = None
+    memory = None
+
+
+def test_memory_6():
+    """Assert that the TPOT _setup_memory function rasies ValueError with a invalid object."""
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        config_dict='TPOT light',
+        memory=str,
+        verbosity=0
+    )
+
+    assert_raises(ValueError, tpot_obj._setup_memory)
 
 
 def test_check_periodic_pipeline():
@@ -957,8 +1096,8 @@ def test_evaluated_individuals_():
             mean_cv_scores = np.mean(cv_scores)
         except Exception as e:
             mean_cv_scores = -float('inf')
-        assert np.allclose(tpot_obj.evaluated_individuals_[pipeline_string][1], mean_cv_scores)
-        assert np.allclose(tpot_obj.evaluated_individuals_[pipeline_string][0], operator_count)
+        assert np.allclose(tpot_obj.evaluated_individuals_[pipeline_string]['internal_cv_score'], mean_cv_scores)
+        assert np.allclose(tpot_obj.evaluated_individuals_[pipeline_string]['operator_count'], operator_count)
 
 
 def test_stop_by_max_time_mins():
@@ -973,7 +1112,7 @@ def test_stop_by_max_time_mins():
 def test_update_evaluated_individuals_():
     """Assert that _update_evaluated_individuals_ raises ValueError when scoring function does not return a float."""
     tpot_obj = TPOTClassifier(config_dict='TPOT light')
-    assert_raises(ValueError, tpot_obj._update_evaluated_individuals_, ['Non-Float-Score'], ['Test_Pipeline'], [1])
+    assert_raises(ValueError, tpot_obj._update_evaluated_individuals_, ['Non-Float-Score'], ['Test_Pipeline'], [1], [dict])
 
 
 def test_evaluate_individuals():
@@ -1109,7 +1248,7 @@ def test_preprocess_individuals():
     with closing(StringIO()) as our_file:
         tpot_obj._file=our_file
         tpot_obj._pbar = tqdm(total=2, disable=False, file=our_file)
-        operator_counts, eval_individuals_str, sklearn_pipeline_list = \
+        operator_counts, eval_individuals_str, sklearn_pipeline_list, stats_dicts = \
                                 tpot_obj._preprocess_individuals(individuals)
         our_file.seek(0)
         assert_in("Pipeline encountered that has previously been evaluated", our_file.read())
@@ -1154,7 +1293,7 @@ def test_preprocess_individuals_2():
     with closing(StringIO()) as our_file:
         tpot_obj._file=our_file
         tpot_obj._pbar = tqdm(total=3, disable=False, file=our_file)
-        operator_counts, eval_individuals_str, sklearn_pipeline_list = \
+        operator_counts, eval_individuals_str, sklearn_pipeline_list, stats_dicts = \
                                 tpot_obj._preprocess_individuals(individuals)
         our_file.seek(0)
 
@@ -1201,7 +1340,7 @@ def test_preprocess_individuals_3():
         tpot_obj._file=our_file
         tpot_obj._pbar = tqdm(total=2, disable=False, file=our_file)
         tpot_obj._pbar.n = 2
-        operator_counts, eval_individuals_str, sklearn_pipeline_list = \
+        operator_counts, eval_individuals_str, sklearn_pipeline_list, stats_dicts = \
                                 tpot_obj._preprocess_individuals(individuals)
         assert tpot_obj._pbar.total == 6
 
@@ -1392,6 +1531,10 @@ def test_PolynomialFeatures_exception():
     pipelines = []
     pipelines.append(creator.Individual.from_string(pipeline_string_1, tpot_obj._pset))
     pipelines.append(creator.Individual.from_string(pipeline_string_2, tpot_obj._pset))
+
+    for pipeline in pipelines:
+        initialize_stats_dict(pipeline)
+
     fitness_scores = tpot_obj._evaluate_individuals(pipelines, pretest_X, pretest_y)
     known_scores = [(2, 0.94000000000000006), (5000.0, -float('inf'))]
     assert np.allclose(known_scores, fitness_scores)
@@ -1483,6 +1626,11 @@ def test_mate_operator():
         ')',
         tpot_obj._pset
     )
+
+    # Initialize stats
+    initialize_stats_dict(ind1)
+    initialize_stats_dict(ind2)
+
 
     # set as evaluated pipelines in tpot_obj.evaluated_individuals_
     tpot_obj.evaluated_individuals_[str(ind1)] = (2, 0.99)
@@ -1579,7 +1727,9 @@ def test_varOr():
     tpot_obj._pbar = tqdm(total=1, disable=True)
     pop = tpot_obj._toolbox.population(n=5)
     for ind in pop:
+        initialize_stats_dict(ind)
         ind.fitness.values = (2, 1.0)
+
 
     offspring = varOr(pop, tpot_obj._toolbox, 5, cxpb=1.0, mutpb=0.0)
     invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
@@ -1599,7 +1749,9 @@ def test_varOr_2():
     tpot_obj._pbar = tqdm(total=1, disable=True)
     pop = tpot_obj._toolbox.population(n=5)
     for ind in pop:
+        initialize_stats_dict(ind)
         ind.fitness.values = (2, 1.0)
+
 
     offspring = varOr(pop, tpot_obj._toolbox, 5, cxpb=0.0, mutpb=1.0)
     invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
