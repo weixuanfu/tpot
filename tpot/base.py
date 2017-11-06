@@ -96,7 +96,7 @@ class TPOTBase(BaseEstimator):
                  scoring=None, cv=5, subsample=1.0, n_jobs=1,
                  max_time_mins=None, max_eval_time_mins=5,
                  random_state=None, config_dict=None, fixed_length=None,
-                 warm_start=False, memory=None,
+                 simple_pipeline=False, warm_start=False, memory=None,
                  periodic_checkpoint_folder=None, early_stop=None,
                  verbosity=0, disable_update_check=False):
         """Set up the genetic programming algorithm for pipeline optimization.
@@ -195,6 +195,8 @@ class TPOTBase(BaseEstimator):
                 operators normally included in TPOT that also support sparse matrices.
         fixed_length: integer (default=None)
             fix length of pipelines
+        simple_pipeline: bool (default=False)
+            Flag indicating whether the TPOT will use StackingEstimator and CombineDFs
         warm_start: bool, optional (default: False)
             Flag indicating whether the TPOT instance will reuse the population from
             previous calls to fit().
@@ -271,6 +273,7 @@ class TPOTBase(BaseEstimator):
         self._max_mut_loops = 50
 
         self.fixed_length = fixed_length
+        self.simple_pipeline = simple_pipeline
 
         if fixed_length:
             self._min = fixed_length
@@ -446,14 +449,21 @@ class TPOTBase(BaseEstimator):
 
     def _add_operators(self):
         for operator in self.operators:
-            if operator.root:
-                # We need to add rooted primitives twice so that they can
-                # return both an Output_Array (and thus be the root of the tree),
-                # and return a np.ndarray so they can exist elsewhere in the tree.
-                p_types = (operator.parameter_types()[0], Output_Array)
-                self._pset.addPrimitive(operator, *p_types)
+            if self.simple_pipeline:
+                if operator.root: # ML algorithms only add once
+                    p_types = (operator.parameter_types()[0], Output_Array)
+                    self._pset.addPrimitive(operator, *p_types)
+                else: # transformers
+                    self._pset.addPrimitive(operator, *operator.parameter_types())
+            else:
+                if operator.root: # classification
+                    # We need to add rooted primitives twice so that they can
+                    # return both an Output_Array (and thus be the root of the tree),
+                    # and return a np.ndarray so they can exist elsewhere in the tree.
+                    p_types = (operator.parameter_types()[0], Output_Array)
+                    self._pset.addPrimitive(operator, *p_types)
+                self._pset.addPrimitive(operator, *operator.parameter_types())
 
-            self._pset.addPrimitive(operator, *operator.parameter_types())
 
             # Import required modules into local namespace so that pipelines
             # may be evaluated directly
@@ -468,7 +478,7 @@ class TPOTBase(BaseEstimator):
                 for var in operator.import_hash[key]:
                     self.operators_context[var] = eval(var)
 
-        if not self.fixed_length: # no CombineDFs when fixed_length
+        if not self.fixed_length and not self.simple_pipeline: # no CombineDFs when fixed_length
             self._pset.addPrimitive(CombineDFs(), [np.ndarray, np.ndarray], np.ndarray)
 
     def _add_terminals(self):
