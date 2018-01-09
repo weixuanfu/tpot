@@ -355,6 +355,8 @@ class TPOTBase(BaseEstimator):
                         'choose a valid scoring function from the TPOT '
                         'documentation.'.format(scoring)
                     )
+                else:
+                    scoring_name = scoring
             elif callable(scoring):
                 # Heuristic to ensure user has not passed a metric
                 module = getattr(scoring, '__module__', None)
@@ -383,9 +385,9 @@ class TPOTBase(BaseEstimator):
                     else:
                         scoring_name = scoring.__name__
                     SCORERS[scoring_name] = scoring
-                scoring = scoring_name
 
-            self.scoring_function = scoring
+            self.scoring_function = scoring_name
+            self.scorer = SCORERS[self.scoring_function]
 
     def _setup_config(self, config_dict):
         if config_dict:
@@ -855,7 +857,7 @@ class TPOTBase(BaseEstimator):
 
         # If the scoring function is a string, we must adjust to use the sklearn
         # scoring interface
-        score = SCORERS[self.scoring_function](
+        score = self.scorer(
             self.fitted_pipeline_,
             testing_features.astype(np.float64),
             testing_target.astype(np.float64)
@@ -1148,7 +1150,7 @@ class TPOTBase(BaseEstimator):
             features=features,
             target=target,
             cv=self.cv,
-            scoring_function=self.scoring_function,
+            scoring_function=self.scorer,
             sample_weight=sample_weight,
             groups=groups,
             timeout=self.max_eval_time_seconds
