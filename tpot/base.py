@@ -387,7 +387,7 @@ class TPOTBase(BaseEstimator):
                     SCORERS[scoring_name] = scoring
 
             self.scoring_function = scoring_name
-            self.scorer = SCORERS[self.scoring_function]
+        self.scorer = SCORERS[self.scoring_function]
 
     def _setup_config(self, config_dict):
         if config_dict:
