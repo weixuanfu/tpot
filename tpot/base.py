@@ -1150,7 +1150,7 @@ class TPOTBase(BaseEstimator):
             features=features,
             target=target,
             cv=self.cv,
-            scoring_function=self.scorer,
+            scoring_function=SCORERS[self.scoring_function],
             sample_weight=sample_weight,
             groups=groups,
             timeout=self.max_eval_time_seconds
