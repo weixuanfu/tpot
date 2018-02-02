@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
-"""Copyright 2015-Present Randal S. Olson.
+"""This file is part of the TPOT library.
 
-This file is part of the TPOT library.
+TPOT was primarily developed at the University of Pennsylvania by:
+    - Randal S. Olson (rso@randalolson.com)
+    - Weixuan Fu (weixuanf@upenn.edu)
+    - Daniel Angell (dpa34@drexel.edu)
+    - and many more generous open source contributors
 
 TPOT is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as
@@ -18,6 +22,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with TPOT. If not, see <http://www.gnu.org/licenses/>.
 
 """
+
 from __future__ import print_function
 import random
 import inspect
@@ -29,6 +34,8 @@ from datetime import datetime
 from multiprocessing import cpu_count
 import os
 import re
+import errno
+
 from tempfile import mkdtemp
 from shutil import rmtree
 
@@ -363,9 +370,12 @@ class TPOTBase(BaseEstimator):
                         'documentation.'.format(scoring)
                     )
             elif callable(scoring):
-                if not isinstance(scoring, _BaseScorer):
-                    # If the user passed a custom metric function, store it in the sklearn
-                    # SCORERS dictionary
+                # Heuristic to ensure user has not passed a metric
+                module = getattr(scoring, '__module__', None)
+                if hasattr(module, 'startswith') and \
+                    (module.startswith('sklearn.metrics.') or module.startswith('tpot.metrics')) and \
+                    not module.startswith('sklearn.metrics.scorer') and \
+                    not module.startswith('sklearn.metrics.tests.'):
                     scoring_name = scoring.__name__
                     greater_is_better = 'loss' not in scoring_name and 'error' not in scoring_name
                     SCORERS[scoring_name] = make_scorer(scoring, greater_is_better=greater_is_better)
@@ -375,7 +385,10 @@ class TPOTBase(BaseEstimator):
                                   'in version TPOT 0.9.1 and will be removed in version 0.11. '
                                   'Please update your custom scoring function.'.format(scoring), DeprecationWarning)
                 else:
-                    scoring_name = scoring._score_func.__name__
+                    if isinstance(scoring, _BaseScorer):
+                        scoring_name = scoring._score_func.__name__
+                    else:
+                        scoring_name = scoring.__name__
                     SCORERS[scoring_name] = scoring
                 scoring = scoring_name
 
@@ -511,7 +524,8 @@ class TPOTBase(BaseEstimator):
 
         Uses genetic programming to optimize a machine learning pipeline that
         maximizes score on the provided features and target. Performs internal
-        k-fold cross-validaton to avoid overfitting on the training data.
+        k-fold cross-validaton to avoid overfitting on the provided data. The
+        best pipeline is then trained on the entire set of provided samples.
 
         Parameters
         ----------
@@ -939,6 +953,7 @@ class TPOTBase(BaseEstimator):
 
     def _save_periodic_pipeline(self):
         try:
+            self._create_periodic_checkpoint_folder()
             filename = os.path.join(self.periodic_checkpoint_folder, 'pipeline_{}.py'.format(datetime.now().strftime('%Y.%m.%d_%H-%M-%S')))
             did_export = self.export(filename, skip_if_repeated=True)
             if not did_export:
@@ -947,6 +962,16 @@ class TPOTBase(BaseEstimator):
                 self._update_pbar(pbar_num=0, pbar_msg='Saving best periodic pipeline to {}'.format(filename))
         except Exception as e:
             self._update_pbar(pbar_num=0, pbar_msg='Failed saving periodic pipeline, exception:\n{}'.format(str(e)[:250]))
+
+    def _create_periodic_checkpoint_folder(self):
+        try:
+            os.makedirs(self.periodic_checkpoint_folder)
+            self._update_pbar(pbar_msg='Created new folder to save periodic pipeline: {}'.format(self.periodic_checkpoint_folder))
+        except OSError as e:
+            if e.errno == errno.EEXIST and os.path.isdir(self.periodic_checkpoint_folder):
+                pass # Folder already exists. User probably created it.
+            else:
+                raise ValueError('Failed creating the periodic_checkpoint_folder:\n{}'.format(e))     
 
     def export(self, output_file_name, skip_if_repeated=False):
         """Export the optimized pipeline as Python code.

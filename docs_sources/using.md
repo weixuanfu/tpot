@@ -6,7 +6,9 @@ so we've gathered a handful of guidelines on what to expect when running AutoML 
 <h5>AutoML algorithms aren't intended to run for only a few minutes</h5>
 
 Of course, you *can* run TPOT for only a few minutes and it will find a reasonably good pipeline for your dataset.
-However, if you don't run TPOT for very long, it may not find the best pipeline possible for your dataset.
+However, if you don't run TPOT for long enough, it may not find the best possible pipeline for your dataset. It may even not
+find any suitable pipeline at all, in which case a `RuntimeError('A pipeline has not yet been optimized. Please call fit() first.')`
+will be raised.
 Often it is worthwhile to run multiple instances of TPOT in parallel for a long time (hours to days) to allow TPOT to thoroughly search
 the pipeline space for your dataset.
 
@@ -74,8 +76,8 @@ Now TPOT is ready to optimize a pipeline for you. You can tell TPOT to optimize 
 pipeline_optimizer.fit(X_train, y_train)
 ```
 
-The `fit` function takes in a training data set and uses k-fold cross-validation when evaluating pipelines. It then
-initializes the genetic programming algoritm to find the best pipeline based on average k-fold score.
+The `fit` function initializes the genetic programming algorithm to find the highest-scoring pipeline based on average k-fold cross-validation
+Then, the pipeline is trained on the entire set of provided samples, and the TPOT instance can be used as a fitted model.
 
 You can then proceed to evaluate the final pipeline on the testing set with the `score` function:
 

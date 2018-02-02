@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
-"""Copyright 2015-Present Randal S. Olson.
+"""This file is part of the TPOT library.
 
-This file is part of the TPOT library.
+TPOT was primarily developed at the University of Pennsylvania by:
+    - Randal S. Olson (rso@randalolson.com)
+    - Weixuan Fu (weixuanf@upenn.edu)
+    - Daniel Angell (dpa34@drexel.edu)
+    - and many more generous open source contributors
 
 TPOT is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as
@@ -149,11 +153,22 @@ def test_init_default_scoring_2():
 
 
 def test_init_default_scoring_3():
-    """Assert that TPOT intitializes with a valid scorer."""
+    """Assert that TPOT intitializes with a valid _BaseScorer."""
     with warnings.catch_warnings(record=True) as w:
         tpot_obj = TPOTClassifier(scoring=make_scorer(balanced_accuracy))
     assert len(w) == 0
     assert tpot_obj.scoring_function == 'balanced_accuracy'
+
+
+def test_init_default_scoring_4():
+    """Assert that TPOT intitializes with a valid scorer."""
+    def my_scorer(clf, X, y):
+        return 0.9
+
+    with warnings.catch_warnings(record=True) as w:
+        tpot_obj = TPOTClassifier(scoring=my_scorer)
+    assert len(w) == 0
+    assert tpot_obj.scoring_function == 'my_scorer'
 
 
 def test_invalid_score_warning():
@@ -929,6 +944,38 @@ def test_save_periodic_pipeline():
         for f in os.listdir('./'):
             if search('pipeline_', f):
                 os.remove(os.path.join('./', f))
+
+def test_save_periodic_pipeline_2():
+    """Assert that _save_periodic_pipeline creates the checkpoint folder and exports to it if it didn't exist"""
+    tpot_obj = TPOTClassifier(
+        random_state=42,
+        population_size=1,
+        offspring_size=2,
+        generations=1,
+        verbosity=0,
+        config_dict='TPOT light'
+    )
+    tpot_obj.fit(training_features, training_target)
+    with closing(StringIO()) as our_file:
+        tpot_obj._file = our_file
+        tpot_obj.verbosity = 3
+        tpot_obj._last_pipeline_write = datetime.now()
+        sleep(0.11)
+        tpot_obj._output_best_pipeline_period_seconds = 0.1
+        tpot_obj.periodic_checkpoint_folder = './tmp'
+        tpot_obj._save_periodic_pipeline()
+        our_file.seek(0)
+
+        msg = our_file.read()
+        expected_filepath_prefix = os.path.join('./tmp', 'pipeline_')
+        assert_in('Saving best periodic pipeline to ' + expected_filepath_prefix, msg)
+        assert_in('Created new folder to save periodic pipeline: ./tmp', msg)
+
+        # clean up
+        for f in os.listdir('./tmp'):
+            if search('pipeline_', f):
+                os.remove(os.path.join('./tmp', f))
+        os.rmdir('./tmp')
 
 
 def test_fit_predict():
