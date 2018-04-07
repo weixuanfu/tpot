@@ -278,16 +278,37 @@ class TPOT_Data_Selector(BaseEstimator):
         # ---------------------------------------------------------------------#
 
 
-    def get_subset(self, input_data, input_target):
+    def get_subset(self, input_data):
+                """Set up the subset selector for pipeline optimization. 
+
+        Parameters
+        ----------
+        input_data: array-like {n_samples, n_features}, required
+            Feature matrix
+
+        TPOT and all scikit-learn algorithms assume that the features will be numerical
+        and there will be no missing values. As such, when a feature matrix is provided
+        to TPOT, all missing values will automatically be replaced (i.e., imputed) using
+        median value imputation.
+
+        If you wish to use a different imputation strategy than median imputation, please
+        make sure to apply imputation to your feature set prior to passing it to TPOT.
+        
+
+        Returns
+        -------
+        self: object
+            Returns a copy of the fitted TPOT object
+
+        """
+            
         self.input_data = input_data
-        self.input_target = input_target
         self.feature_names = list(self.input_data.columns.values)
         
         self.subset_files = os.listdir(self.subset_dir)
         self.num_subset = len(self.subset_files)
         self.feature_set = {}
         self.data_subset = {}
-        self.population_size = population_size
 
         for i in range(self.num_subset):
             self.subset_i = self.subset_dir + "/" + self.subset_files[i]
@@ -300,7 +321,7 @@ class TPOT_Data_Selector(BaseEstimator):
         return self
 
 
-    def fit(self, input_data, input_target, train_size=0.75, test_size=0.25):
+    def fit(self, input_target, train_size=0.75, test_size=0.25):
     """Fit an optimized machine learning pipeline using TPOT.
 
     Uses genetic programming to optimize a machine learning pipeline that
@@ -310,24 +331,9 @@ class TPOT_Data_Selector(BaseEstimator):
 
     Parameters
     ----------
-    features: array-like {n_samples, n_features}
-        Feature matrix
-
-        TPOT and all scikit-learn algorithms assume that the features will be numerical
-        and there will be no missing values. As such, when a feature matrix is provided
-        to TPOT, all missing values will automatically be replaced (i.e., imputed) using
-        median value imputation.
-
-        If you wish to use a different imputation strategy than median imputation, please
-        make sure to apply imputation to your feature set prior to passing it to TPOT.
-    target: array-like {n_samples}
+    input_target: array-like {n_samples}, required
         List of class labels for prediction
-    sample_weight: array-like {n_samples}, optional
-        Per-sample weights. Higher weights force TPOT to put more emphasis on those points
-    groups: array-like, with shape {n_samples, }, optional
-        Group labels for the samples used when performing cross-validation.
-        This parameter should only be used in conjunction with sklearn's Group cross-validation
-        functions, such as sklearn.model_selection.GroupKFold
+
 
     Returns
     -------
@@ -335,28 +341,17 @@ class TPOT_Data_Selector(BaseEstimator):
         Returns a copy of the fitted TPOT object
 
     """
-        # how do I pass tpot parameters here
-        # self.fit(input_data, input_target)
         self.input_target = input_target
-
         # if input_target is discrete  ----- pseudocode
         pipeline_dict = {}
         for i in range(self.num_subset):
-            #X_train, X_test, y_train, y_test = train_test_split(self.data_subset[i], input_target,
-                                                                #train_size, test_size)
+            X_train, X_test, y_train, y_test = train_test_split(self.data_subset[i], input_target,
+                                                                train_size, test_size)
             subX suby!
             pipeline_optimizer = TPOTClassifier(generations=5, population_size=self.population_size,
                                                 cv=5, verbosity=2)
             pipeline_optimizer.fit(X_train, y_train)
             pipeline_dict[subset_idx] = pipeline_optimizer.fitted_pipeline_
+            
         return pipeline_dict
-            #pipeline_optimizer.export('tpot_exported_pipeline_' + i + '.py')
-
-        # else:
-        # for i in range(self.num_subset):
-        #     X_train, X_test, y_train, y_test = train_test_split(self.data_subset[i], input_target,
-        #                                                         train_size, test_size)
-        #     pipeline_optimizer = TPOTRegressor(generations=5, population_size=20,
-        #                                         cv=5, verbosity=2)
-        #     pipeline_optimizer.fit(X_train, y_train)
-        #     pipeline_optimizer.export('tpot_exported_pipeline_' + i + '.py')
+ 
