@@ -103,7 +103,7 @@ class TPOTBase(BaseEstimator):
                  scoring=None, cv=5, subsample=1.0, n_jobs=1,
                  max_time_mins=None, max_eval_time_mins=5,
                  random_state=None, config_dict=None,
-                 warm_start=False, memory=None,
+                 warm_start=False, memory=None, subset_dir=None,
                  periodic_checkpoint_folder=None, early_stop=None,
                  verbosity=0, disable_update_check=False):
         """Set up the genetic programming algorithm for pipeline optimization.
@@ -217,6 +217,11 @@ class TPOTBase(BaseEstimator):
                 and TPOT does NOT clean the caching directory up upon shutdown.
             None:
                 TPOT does not use memory caching.
+        subset_dir: directory, required
+            Path to folder that stores the feature list files. Currently,
+            each file needs to be a .csv with one header row. The feature
+            names in these files must match those in the (training and
+            testing) dataset.
         periodic_checkpoint_folder: path string, optional (default: None)
             If supplied, a folder in which tpot will periodically save the best pipeline so far while optimizing.
             Currently once per generation but not more often than once per 30 seconds.
@@ -267,6 +272,8 @@ class TPOTBase(BaseEstimator):
         self._last_optimized_pareto_front_n_gens = 0
         self.memory = memory
         self._memory = None # initial Memory setting for sklearn pipeline
+
+        self.subset_dir = subset_dir
 
         # dont save periodic pipelines more often than this
         self._output_best_pipeline_period_seconds = 30
@@ -440,6 +447,7 @@ class TPOTBase(BaseEstimator):
                 '{}'.format(config_path)
             )
 
+
     def _setup_pset(self):
         if self.random_state is not None:
             random.seed(self.random_state)
@@ -502,6 +510,47 @@ class TPOTBase(BaseEstimator):
         self._toolbox.register('mate', self._mate_operator)
         self._toolbox.register('expr_mut', self._gen_grow_safe, min_=1, max_=4)
         self._toolbox.register('mutate', self._random_mutation_operator)
+
+
+    def _get_subset(self, features):
+        """Set up the subset selector for pipeline optimization.
+
+        Parameters
+        ----------
+        features: array-like {n_samples, n_features}, required
+            Feature matrix
+
+        TPOT and all scikit-learn algorithms assume that the features will be numerical
+        and there will be no missing values. As such, when a feature matrix is provided
+        to TPOT, all missing values will automatically be replaced (i.e., imputed) using
+        median value imputation.
+
+        If you wish to use a different imputation strategy than median imputation, please
+        make sure to apply imputation to your feature set prior to passing it to TPOT.
+
+
+        Returns
+        -------
+        self: object
+            Returns a copy of the fitted TPOT object
+
+        """
+
+        self.feature_names = list(features.columns.values)
+
+        self.subset_files = os.listdir(self.subset_dir)
+        self.num_subset = len(self.subset_files)
+        self.feature_set = {}
+        self.data_subset = {}
+
+        for i in range(self.num_subset):
+            self.subset_i = self.subset_dir + "/" + self.subset_files[i]
+            self.features_i_df = pd.read_csv(self.subset_i, sep='\t', header=0)
+            # what if not csv? what other file types we should support?
+            self.feature_i = set(features_i_df.values.flatten())
+            self.feature_set[i] = list(feature_i.intersection(set(self.feature_names)))
+            self.data_subset[i] = self.input_data[self.feature_set[i]]
+
 
     def fit(self, features, target, sample_weight=None, groups=None):
         """Fit an optimized machine learning pipeline.
@@ -574,6 +623,51 @@ class TPOTBase(BaseEstimator):
                     'a more reasonable outcome from optimization process in TPOT.'
                 )
 
+        if self.subset_dir: # run subset selector
+            self._get_subset(features)
+            pipeline_dict = {}
+            for i in range(self.num_subset):
+                sub_features = self.data_subset[i]
+                pipeline_optimizer = self._fit(sub_features, target, sample_weight, groups)
+                pipeline_dict[subset_idx] = pipeline_optimizer.fitted_pipeline_
+        else:
+            self._fit(features, target, sample_weight, groups)
+
+    def _fit(self, features, target, sample_weight=None, groups=None):
+        """Internally Fit an optimized machine learning pipeline.
+
+        Uses genetic programming to optimize a machine learning pipeline that
+        maximizes score on the provided features and target. Performs internal
+        k-fold cross-validaton to avoid overfitting on the provided data. The
+        best pipeline is then trained on the entire set of provided samples.
+
+        Parameters
+        ----------
+        features: array-like {n_samples, n_features}
+            Feature matrix
+
+            TPOT and all scikit-learn algorithms assume that the features will be numerical
+            and there will be no missing values. As such, when a feature matrix is provided
+            to TPOT, all missing values will automatically be replaced (i.e., imputed) using
+            median value imputation.
+
+            If you wish to use a different imputation strategy than median imputation, please
+            make sure to apply imputation to your feature set prior to passing it to TPOT.
+        target: array-like {n_samples}
+            List of class labels for prediction
+        sample_weight: array-like {n_samples}, optional
+            Per-sample weights. Higher weights force TPOT to put more emphasis on those points
+        groups: array-like, with shape {n_samples, }, optional
+            Group labels for the samples used when performing cross-validation.
+            This parameter should only be used in conjunction with sklearn's Group cross-validation
+            functions, such as sklearn.model_selection.GroupKFold
+
+        Returns
+        -------
+        self: object
+            Returns a copy of the fitted TPOT object
+
+        """
         # Set the seed for the GP run
         if self.random_state is not None:
             random.seed(self.random_state)  # deap uses random
