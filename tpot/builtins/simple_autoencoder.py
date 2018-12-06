@@ -5,11 +5,12 @@ from keras.layers import Input, Dense
 from keras.models import Model
 from numpy import array
 from numpy import argmax
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.utils import check_array
 pd.options.mode.chained_assignment = None
 
-class SimpleAutoencoder(object):
+class SimpleAutoencoder(BaseEstimator, TransformerMixin):
     
     def __init__(self, x_train, y_train, x_val, y_val, encoding_dim, activation, optimizer, loss, epochs, batch_size):
         self.x_train = x_train
