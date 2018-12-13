@@ -32,28 +32,25 @@ class SimpleAutoencoder(BaseEstimator, TransformerMixin):
         X : array-like
         """
         X, y = check_X_y(X, y, accept_sparse=True, dtype=None)
-        x_train, x_val, y_train, y_val = train_test_split(
+        x_train, x_val, _, _ = train_test_split(
             X, y, test_size=0.25, train_size=0.75, random_state=self.random_state)
 
-        self.x_train = x_train
-        self.X_width = self.x_train.shape[1]
-        self.y_train = y_train
-        self.x_val = x_val
-        self.y_val = y_val
-        self.input_placeholder = Input(shape = (self.X_width, ))    #input placeholder
+
+        X_width = x_train.shape[1]
+        self.input_placeholder = Input(shape = (X_width, ))    #input placeholder
         self.encoded = Dense(self.encoding_dim, activation = self.activation)(self.input_placeholder)   #the encoded representation of input
-        self.decoded = Dense(self.X_width, activation = 'sigmoid')(self.encoded)
+        self.decoded = Dense(X_width, activation = 'sigmoid')(self.encoded)
 
         #define autoencoder model object
-        """
+
         self.autoencoder = Model(self.input_placeholder, self.decoded)
         self.autoencoder.compile(optimizer = self.optimizer, loss = self.loss)
-        self.autoencoder.fit(self.x_train, self.x_train,
+        self.autoencoder.fit(x_train, x_train,
                              epochs = self.epochs,
                              verbose=0,
                              batch_size = self.batch_size,
                              shuffle = True,
-                             validation_data = (self.x_val, self.x_val))"""
+                             validation_data = (x_val, x_val))
         #define separate encoder model object
         self.encoder = Model(self.input_placeholder, self.encoded)
         return self
