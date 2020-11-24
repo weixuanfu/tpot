@@ -151,8 +151,10 @@ class resAdjTransformer(BaseEstimator, TransformerMixin):
             raise ValueError('X is missing the covariate columns')
         if self.adj_list is None:
             raise ValueError('No adjustment information given')
-
-        X_test = pd.DataFrame.copy(X)
+        try:
+            X_test = pd.DataFrame.copy(X)
+        except:
+            X_test = X.convert_to_df()
         X_test.drop(self.C, axis=1, inplace=True)
         X_test_adj = X_test.values
         self.adj_df = pd.read_csv(self.adj_list)
