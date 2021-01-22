@@ -442,7 +442,30 @@ class TPOTBase(BaseEstimator):
             )
 
     def _add_operators(self):
-        main_type = ["Classifier", "Regressor", "Selector", "Transformer"]
+        def add_step(step, step_in_type, step_ret_type):
+            main_type = ["Classifier", "Regressor", "Selector", "Transformer"]
+            if main_type.count(step): # if the step is a main type
+                ops = [op for op in self.operators if op.type() == step]
+                for operator in ops:
+                    if operator.__name__ in ["resAdjTransformer", "FeatureSetSelector"]:
+                        continue
+                    arg_types =  operator.parameter_types()[0][1:]
+                    p_types = ([step_in_type] + arg_types, step_ret_type)
+                    self._pset.addPrimitive(operator, *p_types)
+                    self._import_hash_and_add_terminals(operator, arg_types)
+            else: # is the step is a specific operator or a wrong input
+                try:
+                    operator = next(op for op in self.operators if op.__name__ == step)
+                except:
+                    raise ValueError(
+                        'An error occured while attempting to read the specified '
+                        'template. Please check a step named {}'.format(step)
+                    )
+                arg_types =  operator.parameter_types()[0][1:]
+                p_types = ([step_in_type] + arg_types, step_ret_type)
+                self._pset.addPrimitive(operator, *p_types)
+
+                self._import_hash_and_add_terminals(operator, arg_types)
         ret_types = []
         self.op_list = []
         if self.template == None:  # default pipeline structure
@@ -670,6 +693,12 @@ class TPOTBase(BaseEstimator):
             raise ValueError(
                 "The subsample ratio of the training instance must be in the range (0.0, 1.0]."
             )
+        if self.template:
+            if self.subsample != 1.0 and self.template.count('resAdjTransformer'):
+                raise ValueError(
+                    'The subsample ratio of the training instance must be 1 if resAdjTransformer'
+                    'is in template.'
+                )
 
         if self.n_jobs == 0:
             raise ValueError("The value 0 of n_jobs is invalid.")
@@ -1311,7 +1340,6 @@ class TPOTBase(BaseEstimator):
         """
         if self.verbosity > 1:
             print("Imputing missing values in feature set")
-
         if self._fitted_imputer is None:
             self._fitted_imputer = SimpleImputer(strategy="median")
             self._fitted_imputer.fit(features)
@@ -1365,10 +1393,14 @@ class TPOTBase(BaseEstimator):
                     "customized config dictionary supports sparse matriies."
                 )
         else:
+            if_dataframe = False
             if isinstance(features, np.ndarray):
                 if np.any(np.isnan(features)):
                     self._imputed = True
             elif isinstance(features, DataFrame):
+                features_columns = features.columns
+                feature_index = features.index
+                if_dataframe = True
                 if features.isnull().values.any():
                     self._imputed = True
 
@@ -1379,12 +1411,16 @@ class TPOTBase(BaseEstimator):
             if target is not None:
                 X, y = check_X_y(features, target, accept_sparse=True, dtype=None)
                 if self._imputed:
-                    return X, y
+                    if if_dataframe:
+                        X = DataFrame(X, columns=features_columns, index=feature_index)
+                    return X, target
                 else:
                     return features, target
             else:
                 X = check_array(features, accept_sparse=True, dtype=None)
                 if self._imputed:
+                    if if_dataframe:
+                        X = DataFrame(X, columns=features_columns, index=feature_index)
                     return X
                 else:
                     return features
