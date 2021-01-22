@@ -468,11 +468,11 @@ class TPOTBase(BaseEstimator):
                 self._import_hash_and_add_terminals(operator, arg_types)
         ret_types = []
         self.op_list = []
-        if self.template == None:  # default pipeline structure
+        if self.template == None: # default pipeline structure
             step_in_type = np.ndarray
             step_ret_type = Output_Array
             for operator in self.operators:
-                arg_types = operator.parameter_types()[0][1:]
+                arg_types =  operator.parameter_types()[0][1:]
                 p_types = ([step_in_type] + arg_types, step_ret_type)
                 if operator.root:
                     # We need to add rooted primitives twice so that they can
@@ -482,9 +482,7 @@ class TPOTBase(BaseEstimator):
                 tree_p_types = ([step_in_type] + arg_types, step_in_type)
                 self._pset.addPrimitive(operator, *tree_p_types)
                 self._import_hash_and_add_terminals(operator, arg_types)
-            self._pset.addPrimitive(
-                CombineDFs(), [step_in_type, step_in_type], step_in_type
-            )
+            self._pset.addPrimitive(CombineDFs(), [step_in_type, step_in_type], step_in_type)
         else:
             gp_types = {}
             for idx, step in enumerate(self._template_comp):
@@ -494,40 +492,23 @@ class TPOTBase(BaseEstimator):
                     step_in_type = ret_types[-1]
                 else:
                     step_in_type = np.ndarray
-                if step != "CombineDFs":
+                if step != 'CombineDFs':
                     if idx < len(self._template_comp) - 1:
                         # create an empty for returning class for strongly-type GP
-                        step_ret_type_name = "Ret_{}".format(idx)
+                        step_ret_type_name = 'Ret_{}'.format(idx)
                         step_ret_type = type(step_ret_type_name, (object,), {})
                         ret_types.append(step_ret_type)
                     else:
                         step_ret_type = Output_Array
                 check_template = True
-                if step == "CombineDFs":
-                    self._pset.addPrimitive(
-                        CombineDFs(), [step_in_type, step_in_type], step_in_type
-                    )
-                elif main_type.count(step):  # if the step is a main type
-                    ops = [op for op in self.operators if op.type() == step]
-                    for operator in ops:
-                        arg_types = operator.parameter_types()[0][1:]
-                        p_types = ([step_in_type] + arg_types, step_ret_type)
-                        self._pset.addPrimitive(operator, *p_types)
-                        self._import_hash_and_add_terminals(operator, arg_types)
-                else:  # is the step is a specific operator or a wrong input
-                    try:
-                        operator = next(
-                            op for op in self.operators if op.__name__ == step
-                        )
-                    except:
-                        raise ValueError(
-                            "An error occured while attempting to read the specified "
-                            "template. Please check a step named {}".format(step)
-                        )
-                    arg_types = operator.parameter_types()[0][1:]
-                    p_types = ([step_in_type] + arg_types, step_ret_type)
-                    self._pset.addPrimitive(operator, *p_types)
-                    self._import_hash_and_add_terminals(operator, arg_types)
+                if step == 'CombineDFs':
+                    self._pset.addPrimitive(CombineDFs(), [step_in_type, step_in_type], step_in_type)
+                elif step.count("|"):
+                    for s in step.split('|'):
+                        add_step(s, step_in_type, step_ret_type)
+                else:
+                    add_step(step, step_in_type, step_ret_type)
+
         self.ret_types = [np.ndarray, Output_Array] + ret_types
 
     def _import_hash_and_add_terminals(self, operator, arg_types):
